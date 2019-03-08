@@ -29,6 +29,7 @@ var (
 	lang          = flag.String("lang", "", "target languages for bindings, either java, go, or objc. If empty, all languages are generated.")
 	outdir        = flag.String("outdir", "", "result will be written to the directory instead of stdout.")
 	javaPkg       = flag.String("javapkg", "", "custom Java package path prefix. Valid only with -lang=java.")
+	libName       = flag.String("libname", "", "custom libname. Valid only with -lang=java.")
 	prefix        = flag.String("prefix", "", "custom Objective-C name prefix. Valid only with -lang=objc.")
 	bootclasspath = flag.String("bootclasspath", "", "Java bootstrap classpath.")
 	classpath     = flag.String("classpath", "", "Java classpath.")

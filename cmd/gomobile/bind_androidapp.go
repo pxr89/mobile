@@ -36,6 +36,11 @@ func goAndroidBind(gobind string, pkgs []*build.Package, androidArchs []string) 
 	if bindJavaPkg != "" {
 		cmd.Args = append(cmd.Args, "-javapkg="+bindJavaPkg)
 	}
+	if bindLibName != "" {
+		//cmd.Args = append(cmd.Args, "-libname="+bindLibName)
+	} else {
+		bindLibName="gojni"
+	}
 	if bindClasspath != "" {
 		cmd.Args = append(cmd.Args, "-classpath="+bindClasspath)
 	}
@@ -63,7 +68,7 @@ func goAndroidBind(gobind string, pkgs []*build.Package, androidArchs []string) 
 			"gobind",
 			env,
 			"-buildmode=c-shared",
-			"-o="+filepath.Join(androidDir, "src/main/jniLibs/"+toolchain.abi+"/libgojni.so"),
+			"-o="+filepath.Join(androidDir, "src/main/jniLibs/"+toolchain.abi+"/lib"+bindLibName+".so"),
 		)
 		if err != nil {
 			return err
@@ -105,7 +110,7 @@ func buildSrcJar(src string) error {
 //	AndroidManifest.xml (mandatory)
 // 	classes.jar (mandatory)
 //	assets/ (optional)
-//	jni/<abi>/libgojni.so
+//	jni/<abi>/lib<bindLibName>.so
 //	R.txt (mandatory)
 //	res/ (mandatory)
 //	libs/*.jar (optional, not relevant)
@@ -148,7 +153,8 @@ func buildAAR(srcDir, androidDir string, pkgs []*build.Package, androidArchs []s
 	}
 	const manifestFmt = `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package=%q>
 <uses-sdk android:minSdkVersion="%d"/></manifest>`
-	fmt.Fprintf(w, manifestFmt, "go."+pkgs[0].Name+".gojni", minAndroidAPI)
+	fmt.Fprintf(w, manifestFmt, "go."+pkgs[0].Name+"."+bindLibName, minAndroidAPI)
+
 
 	w, err = aarwcreate("proguard.txt")
 	if err != nil {
@@ -216,7 +222,7 @@ func buildAAR(srcDir, androidDir string, pkgs []*build.Package, androidArchs []s
 
 	for _, arch := range androidArchs {
 		toolchain := ndk.Toolchain(arch)
-		lib := toolchain.abi + "/libgojni.so"
+		lib := toolchain.abi + "/lib"+bindLibName+".so"
 		w, err = aarwcreate("jni/" + lib)
 		if err != nil {
 			return err
@@ -253,10 +259,14 @@ const (
 )
 
 func buildJar(w io.Writer, srcDir string) error {
+
+	buildLoadJniJava(srcDir,bindLibName)
+
 	var srcFiles []string
 	if buildN {
 		srcFiles = []string{"*.java"}
 	} else {
+
 		err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -392,3 +402,57 @@ func androidAPIPath() (string, error) {
 	}
 	return apiPath, nil
 }
+
+
+
+const (
+	LoadJNIpre = `
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package go;
+
+import android.app.Application;
+import android.content.Context;
+
+import java.util.logging.Logger;
+
+// LoadJNI is a shim class used by 'gomobile bind' to auto-load the
+// compiled go library and pass the android application context to
+// Go side.
+//
+// TODO(hyangah): should this be in cmd/gomobile directory?
+public class LoadJNI {
+        private static Logger log = Logger.getLogger("GoLoadJNI");
+
+        public static final Object ctx;
+
+        static {
+                System.loadLibrary("`
+	LoadJNIend=`");
+
+                Object androidCtx = null;
+                try {
+                        // TODO(hyangah): check proguard rule.
+                        Application appl = (Application)Class.forName("android.app.AppGlobals").getMethod("getInitialApplication").invoke(null);
+                        androidCtx = appl.getApplicationContext();
+                } catch (Exception e) {
+                        log.warning("Global context not found: " + e);
+                } finally {
+                        ctx = androidCtx;
+                }
+        }
+}`
+)
+
+func buildLoadJniJava(srcDir string,libname string) error{
+	f, err := os.Create(srcDir+"/go/LoadJNI.java")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(f,LoadJNIpre + libname + LoadJNIend)
+	f.Close()
+	return err
+}
+

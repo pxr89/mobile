@@ -89,6 +89,9 @@ func runBind(cmd *command) error {
 	if bindJavaPkg != "" && ctx.GOOS != "android" {
 		return fmt.Errorf("-javapkg is supported only for android target")
 	}
+	if bindLibName != "" && ctx.GOOS != "android" {
+		return fmt.Errorf("-libname is supported only for android target")
+	}
 	if bindPrefix != "" && ctx.GOOS != "darwin" {
 		return fmt.Errorf("-prefix is supported only for ios target")
 	}
@@ -162,12 +165,15 @@ var (
 	bindJavaPkg       string // -javapkg
 	bindClasspath     string // -classpath
 	bindBootClasspath string // -bootclasspath
+	bindLibName		  string // -libname
 )
 
 func init() {
 	// bind command specific commands.
 	cmdBind.flag.StringVar(&bindJavaPkg, "javapkg", "",
 		"specifies custom Java package path prefix. Valid only with -target=android.")
+	cmdBind.flag.StringVar(&bindLibName, "libname", "",
+		"specifies custom so lib name. Valid only with -target=android.")
 	cmdBind.flag.StringVar(&bindPrefix, "prefix", "",
 		"custom Objective-C name prefix. Valid only with -target=ios.")
 	cmdBind.flag.StringVar(&bindClasspath, "classpath", "", "The classpath for imported Java classes. Valid only with -target=android.")
